@@ -40,8 +40,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ImperialKoi"
-Repository = "https://github.com/yourusername/star-shell"
+Homepage = "https://github.com/ImperialKoi/Star-Shell"
+Repository = "https://github.com/ImperialKoi/Star-Shell"
+Issues = "https://github.com/ImperialKoi/Star-Shell/issues"
 
 [project.scripts]
 star-shell = "star_shell.main:app"
