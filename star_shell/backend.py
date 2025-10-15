@@ -112,7 +112,7 @@ class GeminiGenie(BaseGenie):
         self.shell = shell
         self.api_key = api_key
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-pro')
+        self.model = genai.GenerativeModel('gemini-2.5-pro')
 
     def validate_credentials(self) -> bool:
         """Validate the Gemini API key by making a test request."""

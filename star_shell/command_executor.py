@@ -5,7 +5,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.prompt import Confirm
-from command_safety import CommandSafetyChecker
+from star_shell.command_safety import CommandSafetyChecker
 
 
 class CommandExecutor:

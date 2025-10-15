@@ -2,8 +2,8 @@ import platform
 import json
 from pathlib import Path
 import typer
-from backend import OpenAIGenie, GeminiGenie
-from security import secure_storage
+from star_shell.backend import OpenAIGenie, GeminiGenie
+from star_shell.security import secure_storage
 
 
 def get_os_info():

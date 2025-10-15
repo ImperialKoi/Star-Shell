@@ -6,9 +6,9 @@ from rich.prompt import Prompt
 from rich.panel import Panel
 from rich.text import Text
 
-from backend import BaseGenie
-from context import ContextProvider
-from command_executor import CommandExecutor
+from star_shell.backend import BaseGenie
+from star_shell.context import ContextProvider
+from star_shell.command_executor import CommandExecutor
 
 
 class SessionManager:

@@ -8,11 +8,11 @@ import typer
 from rich import print
 from rich.prompt import Confirm, Prompt
 
-from utils import get_backend, get_os_info, load_config
-from security import secure_storage
-from context import ContextProvider
-from command_executor import CommandExecutor
-from session_manager import SessionManager
+from star_shell.utils import get_backend, get_os_info, load_config
+from star_shell.security import secure_storage
+from star_shell.context import ContextProvider
+from star_shell.command_executor import CommandExecutor
+from star_shell.session_manager import SessionManager
 
 APP_NAME = ".star_shell"
 app = typer.Typer()
@@ -37,7 +37,7 @@ def init():
         # Basic API key validation for Gemini
         print("[yellow]Validating Gemini API key...[/yellow]")
         try:
-            from backend import GeminiGenie
+            from star_shell.backend import GeminiGenie
             test_genie = GeminiGenie(gemini_api_key, "test", "test")
             if test_genie.validate_credentials():
                 print("[green]✓ Gemini API key is valid[/green]")
