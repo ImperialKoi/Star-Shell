@@ -17,6 +17,21 @@ from star_shell.session_manager import SessionManager
 APP_NAME = ".star_shell"
 app = typer.Typer()
 
+def check_initialization():
+    """Check if Star Shell has been initialized."""
+    try:
+        load_config()
+        return True
+    except FileNotFoundError:
+        return False
+
+def require_initialization():
+    """Ensure Star Shell is initialized before running commands."""
+    if not check_initialization():
+        print("[red]⚠️  Star Shell is not initialized![/red]")
+        print("[yellow]Please run 'star-shell init' first to set up your AI backend.[/yellow]")
+        raise typer.Exit(1)
+
 
 @app.command()
 def init():
@@ -105,16 +120,31 @@ def init():
     print(f"[bold green]Config file saved at {config_path}[/bold green]")
 
 
+@app.callback(invoke_without_command=True)
+def main(ctx: typer.Context):
+    """Star Shell - AI-powered command line assistant."""
+    if ctx.invoked_subcommand is None:
+        # No subcommand provided, check if initialized
+        if not check_initialization():
+            print("[bold blue]⭐ Welcome to Star Shell![/bold blue]")
+            print("[yellow]You need to initialize Star Shell first.[/yellow]")
+            print("[cyan]Run: star-shell init[/cyan]")
+            raise typer.Exit(1)
+        else:
+            # Already initialized, show help
+            print("[bold blue]⭐ Star Shell is ready![/bold blue]")
+            print("[cyan]Run: star-shell run[/cyan] to start the interactive terminal")
+            print("[cyan]Run: star-shell --help[/cyan] for more options")
+
 @app.command()
 def ask(
     wish: str = typer.Argument(..., help="What do you want to do?"),
     explain: bool = False,
 ):
-    try:
-        config = load_config()
-    except FileNotFoundError as e:
-        print(f"[red]Error: {e}[/red]")
-        return
+    """Ask Star Shell to generate a specific command."""
+    require_initialization()
+    
+    config = load_config()
 
     # Create context provider and gather context
     context_provider = ContextProvider()
@@ -150,13 +180,11 @@ def ask(
 
 
 @app.command()
-def chat():
-    """Start an interactive chat session with Star Shell."""
-    try:
-        config = load_config()
-    except FileNotFoundError as e:
-        print(f"[red]Error: {e}[/red]")
-        return
+def run():
+    """Start the Star Shell interactive terminal."""
+    require_initialization()
+    
+    config = load_config()
 
     # Create context provider and genie
     context_provider = ContextProvider()
@@ -165,6 +193,12 @@ def chat():
     # Create and start session manager
     session_manager = SessionManager(genie, context_provider)
     session_manager.start_conversation()
+
+@app.command()
+def chat():
+    """Legacy command - use 'run' instead."""
+    print("[yellow]The 'chat' command is deprecated. Use 'star-shell run' instead.[/yellow]")
+    run()
 
 
 if __name__ == "__main__":

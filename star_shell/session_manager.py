@@ -59,11 +59,7 @@ class SessionManager:
         
         return "\n".join(history_lines) + "\n\n"
     
-    def should_execute_command(self, command: str) -> bool:
-        """Check if a response looks like a command that should be executed."""
-        # Simple heuristic: if it starts with common command patterns
-        command_starters = ['cd ', 'ls', 'mkdir', 'rm', 'cp', 'mv', 'grep', 'find', 'cat', 'echo', 'git ', 'npm ', 'pip ', 'python', 'node']
-        return any(command.strip().startswith(starter) for starter in command_starters)
+
     
     def process_input(self, user_input: str) -> bool:
         """
@@ -76,47 +72,53 @@ class SessionManager:
         if user_input.lower().strip() in ['exit', 'quit', 'bye', 'goodbye']:
             return False
         
+        # Handle help command
+        if user_input.lower().strip() == 'help':
+            self.display_help()
+            return True
+        
         # Add user input to history
         self.add_to_history("user", user_input)
         
         try:
             # Get current context
             context = self.get_context()
-            
-            # For chat mode, we'll modify the prompt to include conversation history
-            # We'll pass the history through the context for now
             context["conversation_history"] = self.conversation_history
             
-            # Get AI response
-            command, description = self.genie.ask(user_input, explain=True, context=context)
+            # Get AI response using the new chat method
+            response_type, content, description = self.genie.chat(user_input, context=context)
             
-            # Add AI response to history
-            self.add_to_history("assistant", f"Command: {command}" + (f"\nDescription: {description}" if description else ""))
-            
-            # Display the response
-            if self.should_execute_command(command):
-                # This looks like a command - use the command executor
-                self.executor.display_command(command, description)
+            if response_type == "command":
+                # AI wants to execute a command
+                self.add_to_history("assistant", f"Command: {content}" + (f"\nDescription: {description}" if description else ""))
+                
+                # Display the command
+                self.executor.display_command(content, description)
                 
                 # Ask if user wants to execute
                 if self.executor.prompt_for_execution():
-                    if self.executor.check_command_safety(command):
+                    if self.executor.check_command_safety(content):
                         self.console.print("[blue]Executing command...[/blue]")
-                        return_code, stdout, stderr = self.executor.execute_command(command)
+                        return_code, stdout, stderr = self.executor.execute_command(content)
                         self.executor.display_execution_result(return_code, stdout, stderr)
+                        
+                        # Add execution result to history
+                        if return_code == 0:
+                            self.add_to_history("system", f"Command executed successfully: {stdout[:200]}")
+                        else:
+                            self.add_to_history("system", f"Command failed: {stderr[:200]}")
                     else:
                         self.console.print("[yellow]Command execution cancelled due to safety concerns.[/yellow]")
                 else:
                     self.console.print("[yellow]Command execution cancelled by user.[/yellow]")
-            else:
-                # This looks like a general response - display as text
-                response_text = command
-                if description:
-                    response_text += f"\n\n{description}"
+                    
+            elif response_type == "text":
+                # AI is responding with natural language
+                self.add_to_history("assistant", content)
                 
                 self.console.print(Panel(
-                    response_text,
-                    title="[bold green]Assistant[/bold green]",
+                    content,
+                    title="[bold green]⭐ Star Shell[/bold green]",
                     border_style="green",
                     padding=(0, 1)
                 ))
@@ -127,18 +129,50 @@ class SessionManager:
         return True
     
     def display_welcome(self):
-        """Display welcome message for chat mode."""
+        """Display welcome message for the interactive terminal."""
         welcome_text = Text()
-        welcome_text.append("Welcome to Star Shell Chat Mode!\n\n", style="bold blue")
-        welcome_text.append("You can ask questions, request commands, or have a conversation.\n")
-        welcome_text.append("Type 'exit', 'quit', or press Ctrl+C to end the session.\n")
-        welcome_text.append("Commands will be offered for execution when appropriate.")
+        welcome_text.append("⭐ Welcome to Star Shell Interactive Terminal!\n\n", style="bold blue")
+        welcome_text.append("I'm your AI assistant for command line tasks. You can:\n", style="white")
+        welcome_text.append("• Ask me to run commands: ", style="cyan")
+        welcome_text.append("'list all Python files'\n", style="white")
+        welcome_text.append("• Have conversations: ", style="cyan")
+        welcome_text.append("'What's the difference between git merge and rebase?'\n", style="white")
+        welcome_text.append("• Get help: ", style="cyan")
+        welcome_text.append("'help'\n", style="white")
+        welcome_text.append("• Exit: ", style="cyan")
+        welcome_text.append("'exit' or Ctrl+C\n\n", style="white")
+        welcome_text.append("I'll automatically detect if you need a command or just want to chat!", style="yellow")
         
         self.console.print(Panel(
             welcome_text,
-            title="[bold blue]Star Shell Chat[/bold blue]",
+            title="[bold blue]⭐ Star Shell Terminal[/bold blue]",
             border_style="blue",
             padding=(1, 2)
+        ))
+    
+    def display_help(self):
+        """Display help information."""
+        help_text = Text()
+        help_text.append("⭐ Star Shell Help\n\n", style="bold blue")
+        help_text.append("Commands:\n", style="bold white")
+        help_text.append("• ", style="cyan")
+        help_text.append("help", style="bold cyan")
+        help_text.append(" - Show this help message\n", style="white")
+        help_text.append("• ", style="cyan")
+        help_text.append("exit/quit", style="bold cyan")
+        help_text.append(" - Exit Star Shell\n\n", style="white")
+        
+        help_text.append("Examples:\n", style="bold white")
+        help_text.append("• 'create a new directory called projects'\n", style="green")
+        help_text.append("• 'show me all running processes'\n", style="green")
+        help_text.append("• 'what does the ls command do?'\n", style="green")
+        help_text.append("• 'how do I check disk space?'\n", style="green")
+        
+        self.console.print(Panel(
+            help_text,
+            title="[bold blue]Help[/bold blue]",
+            border_style="blue",
+            padding=(0, 1)
         ))
     
     def start_conversation(self):
@@ -148,7 +182,7 @@ class SessionManager:
         while self.running:
             try:
                 # Get user input
-                user_input = Prompt.ask("\n[bold blue]You[/bold blue]", console=self.console)
+                user_input = Prompt.ask("\n[bold blue]⭐[/bold blue]", console=self.console)
                 
                 if not user_input.strip():
                     continue
