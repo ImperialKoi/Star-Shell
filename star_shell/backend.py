@@ -197,12 +197,20 @@ Make sure commands work on {self.os_fullname} using {self.shell}. Be helpful and
 
 
 class GeminiGenie(BaseGenie):
-    def __init__(self, api_key: str, os_fullname: str, shell: str):
+    def __init__(self, api_key: str, os_fullname: str, shell: str, backend_type: str = "gemini-pro"):
         self.os_fullname = os_fullname
         self.shell = shell
         self.api_key = api_key
+        self.backend_type = backend_type
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-2.5-pro')
+        
+        # Choose model based on backend type
+        if backend_type == "gemini-flash":
+            model_name = 'gemini-2.0-flash-exp'
+        else:
+            model_name = 'gemini-2.5-pro'
+            
+        self.model = genai.GenerativeModel(model_name)
 
     def validate_credentials(self) -> bool:
         """Validate the Gemini API key by making a test request."""

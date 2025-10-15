@@ -47,11 +47,12 @@ def get_backend(**config: dict):
             shell=config["shell"],
         )
 
-    elif backend_name == "gemini-pro":
+    elif backend_name in ["gemini-pro", "gemini-flash"]:
         return GeminiGenie(
             api_key=config["gemini_api_key"],
             os_fullname=config["os_fullname"],
             shell=config["shell"],
+            backend_type=backend_name,
         )
     else:
         raise ValueError(f"Unknown backend: {backend_name}")

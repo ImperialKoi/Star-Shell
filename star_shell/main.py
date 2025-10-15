@@ -37,7 +37,7 @@ def require_initialization():
 def init():
 
     backend = Prompt.ask(
-        "Select backend:", choices=["openai-gpt-3.5-turbo", "gemini-pro"]
+        "Select backend:", choices=["openai-gpt-3.5-turbo", "gemini-pro", "gemini-flash"]
     )
     additional_params = {}
 
@@ -46,23 +46,25 @@ def init():
         # Encrypt the API key before storing
         additional_params["openai_api_key"] = secure_storage.encrypt_api_key(openai_api_key)
 
-    if backend == "gemini-pro":
-        gemini_api_key = Prompt.ask("Enter a Gemini Pro API key")
+    if backend in ["gemini-pro", "gemini-flash"]:
+        model_name = "Gemini Pro" if backend == "gemini-pro" else "Gemini Flash"
+        gemini_api_key = Prompt.ask(f"Enter a {model_name} API key")
         
         # Basic API key validation for Gemini
-        print("[yellow]Validating Gemini API key...[/yellow]")
+        print(f"[yellow]Validating {model_name} API key...[/yellow]")
         try:
             from star_shell.backend import GeminiGenie
-            test_genie = GeminiGenie(gemini_api_key, "test", "test")
+            # Pass the backend type to determine which model to use
+            test_genie = GeminiGenie(gemini_api_key, "test", "test", backend)
             if test_genie.validate_credentials():
-                print("[green]✓ Gemini API key is valid[/green]")
+                print(f"[green]✓ {model_name} API key is valid[/green]")
                 # Encrypt the API key before storing
                 additional_params["gemini_api_key"] = secure_storage.encrypt_api_key(gemini_api_key)
             else:
-                print("[red]✗ Invalid Gemini API key. Please check your key and try again.[/red]")
+                print(f"[red]✗ Invalid {model_name} API key. Please check your key and try again.[/red]")
                 return
         except Exception as e:
-            print(f"[red]✗ Error validating Gemini API key: {e}[/red]")
+            print(f"[red]✗ Error validating {model_name} API key: {e}[/red]")
             return
 
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "star-shell"
-version = "0.2.0"
+version = "0.2.1"
 description = "AI-powered command line assistant that generates and executes shell commands"
 readme = "README.md"
 requires-python = ">=3.8"
