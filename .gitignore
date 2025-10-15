@@ -141,3 +141,7 @@ Thumbs.db
 # Project specific
 config.json
 .star_shell/
+.kiro/
+
+# Kiro
+.kiro/
