@@ -36,9 +36,29 @@ def require_initialization():
 @app.command()
 def init():
 
-    backend = Prompt.ask(
-        "Select backend:", choices=["openai-gpt-3.5-turbo", "gemini-pro", "gemini-flash"]
-    )
+    # Allow hidden option for secret backend
+    print("Select backend:")
+    print("1. openai-gpt-3.5-turbo")
+    print("2. gemini-pro") 
+    print("3. gemini-flash")
+    
+    backend_input = Prompt.ask("Enter your choice (1-3 or backend name)")
+    
+    # Map choices
+    backend_map = {
+        "1": "openai-gpt-3.5-turbo",
+        "2": "gemini-pro",
+        "3": "gemini-flash",
+        "openai-gpt-3.5-turbo": "openai-gpt-3.5-turbo",
+        "gemini-pro": "gemini-pro",
+        "gemini-flash": "gemini-flash",
+        "secret-3.14159": "secret-3.14159"  # Hidden option
+    }
+    
+    backend = backend_map.get(backend_input)
+    if not backend:
+        print("[red]Invalid backend selection.[/red]")
+        return
     additional_params = {}
 
     if backend == "openai-gpt-3.5-turbo":
@@ -46,7 +66,37 @@ def init():
         # Encrypt the API key before storing
         additional_params["openai_api_key"] = secure_storage.encrypt_api_key(openai_api_key)
 
-    if backend in ["gemini-pro", "gemini-flash"]:
+    if backend == "secret-3.14159":
+        print("[green]🎉 Secret backend activated! Using shared Gemini keys.[/green]")
+        
+        # Ask for model preference
+        model_choice = Prompt.ask(
+            "Select model:", 
+            choices=["gemini-pro", "gemini-flash"],
+            default="gemini-pro"
+        )
+        
+        # Default backend URL - replace with your deployed service URL
+        backend_url = "https://your-star-shell-backend.onrender.com"  # Replace with your actual Render URL
+        
+        # Test connection to proxy service
+        print("[yellow]Testing connection to Star Shell backend...[/yellow]")
+        try:
+            from star_shell.backend import ProxyGenie
+            test_genie = ProxyGenie(backend_url, "secret-3.14159", "test", "test", model_choice)
+            if test_genie.validate_credentials():
+                print("[green]✓ Connected to Star Shell backend successfully[/green]")
+                additional_params["backend_url"] = backend_url
+                additional_params["secret_token"] = "secret-3.14159"
+                additional_params["model_type"] = model_choice
+            else:
+                print("[red]✗ Could not connect to Star Shell backend. Please try again later.[/red]")
+                return
+        except Exception as e:
+            print(f"[red]✗ Error connecting to Star Shell backend: {e}[/red]")
+            return
+            
+    elif backend in ["gemini-pro", "gemini-flash"]:
         model_name = "Gemini Pro" if backend == "gemini-pro" else "Gemini Flash"
         gemini_api_key = Prompt.ask(f"Enter a {model_name} API key")
         

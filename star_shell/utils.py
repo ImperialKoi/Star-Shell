@@ -2,7 +2,7 @@ import platform
 import json
 from pathlib import Path
 import typer
-from star_shell.backend import OpenAIGenie, GeminiGenie
+from star_shell.backend import OpenAIGenie, GeminiGenie, ProxyGenie
 from star_shell.security import secure_storage
 
 
@@ -47,6 +47,14 @@ def get_backend(**config: dict):
             shell=config["shell"],
         )
 
+    elif backend_name == "secret-3.14159":
+        return ProxyGenie(
+            backend_url=config["backend_url"],
+            secret_token=config["secret_token"],
+            os_fullname=config["os_fullname"],
+            shell=config["shell"],
+            model_type=config["model_type"],
+        )
     elif backend_name in ["gemini-pro", "gemini-flash"]:
         return GeminiGenie(
             api_key=config["gemini_api_key"],

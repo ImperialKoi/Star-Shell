@@ -1,5 +1,7 @@
 import openai
 import google.generativeai as genai
+import requests
+import json
 
 
 class BaseGenie:
@@ -382,3 +384,216 @@ Make sure commands work on {self.os_fullname} using {self.shell}. Be helpful and
                 
         except Exception as e:
             raise ValueError(f"Error processing Gemini chat response: {str(e)}")
+
+
+class ProxyGenie(BaseGenie):
+    """Genie that uses the Star Shell backend proxy service"""
+    
+    def __init__(self, backend_url: str, secret_token: str, os_fullname: str, shell: str, model_type: str = "gemini-pro"):
+        self.backend_url = backend_url.rstrip('/')
+        self.secret_token = secret_token
+        self.os_fullname = os_fullname
+        self.shell = shell
+        self.model_type = model_type
+        
+        # Map model types to actual model names
+        self.model_map = {
+            "gemini-pro": "gemini-2.5-pro",
+            "gemini-flash": "gemini-2.0-flash-exp"
+        }
+    
+    def validate_credentials(self) -> bool:
+        """Validate connection to the proxy service."""
+        try:
+            response = requests.get(
+                f"{self.backend_url}/health",
+                timeout=10
+            )
+            return response.status_code == 200
+        except Exception:
+            return False
+    
+    def _make_proxy_request(self, prompt: str, max_tokens: int = 400, temperature: float = 0.3) -> str:
+        """Make a request to the proxy service."""
+        model_name = self.model_map.get(self.model_type, "gemini-2.5-pro")
+        
+        headers = {
+            'Authorization': f'Bearer {self.secret_token}',
+            'Content-Type': 'application/json'
+        }
+        
+        data = {
+            'prompt': prompt,
+            'model': model_name,
+            'max_tokens': max_tokens,
+            'temperature': temperature
+        }
+        
+        try:
+            response = requests.post(
+                f"{self.backend_url}/api/generate",
+                headers=headers,
+                json=data,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                return result['response']
+            else:
+                error_data = response.json() if response.headers.get('content-type', '').startswith('application/json') else {'error': response.text}
+                raise ValueError(f"Proxy service error: {error_data.get('error', 'Unknown error')}")
+                
+        except requests.exceptions.RequestException as e:
+            raise ValueError(f"Failed to connect to proxy service: {str(e)}")
+    
+    def ask(self, wish: str, explain: bool = False, context: dict = None):
+        """Generate command using the proxy service."""
+        # Build the same prompt structure as GeminiGenie
+        explain_text = ""
+        format_text = "Command: <insert_command_here>"
+
+        if explain:
+            explain_text = (
+                "Also, provide a detailed description of how the command works."
+            )
+            format_text += "\nDescription: <insert_description_here>\nThe description should be in the same language the user is using."
+        format_text += "\nDon't enclose the command with extra quotes or backticks."
+
+        # Build context information
+        context_text = ""
+        if context:
+            context_lines = [
+                "Current Context:",
+                f"- Working Directory: {context.get('current_directory', 'Unknown')}",
+                f"- OS: {context.get('system_info', {}).get('os', self.os_fullname)}",
+                f"- Shell: {context.get('system_info', {}).get('shell_name', self.shell)}",
+            ]
+            
+            if "directory_contents" in context and context["directory_contents"]:
+                contents_preview = ", ".join(context["directory_contents"][:10])
+                if len(context["directory_contents"]) > 10:
+                    contents_preview += "..."
+                context_lines.append(f"- Directory Contents: {contents_preview}")
+            
+            context_text = "\n".join(context_lines) + "\n\n"
+
+        # Add conversation history if available
+        history_text = ""
+        if context and "conversation_history" in context and context["conversation_history"]:
+            history_lines = ["Recent conversation:"]
+            for msg in context["conversation_history"][-6:]:  # Last 3 exchanges
+                role_label = "User" if msg["role"] == "user" else "Assistant"
+                history_lines.append(f"{role_label}: {msg['content']}")
+            history_text = "\n".join(history_lines) + "\n\n"
+
+        prompt_list = [
+            context_text,
+            history_text,
+            f"Instructions: Write a CLI command that does the following: {wish}. Make sure the command is correct and works on {self.os_fullname} using {self.shell}. {explain_text}",
+            "Format:",
+            format_text,
+            "Make sure you use the format exactly as it is shown above.",
+        ]
+        prompt = "\n\n".join([p for p in prompt_list if p])  # Filter out empty strings
+        
+        try:
+            response_text = self._make_proxy_request(prompt, max_tokens=300 if explain else 180)
+            
+            # Parse the response similar to GeminiGenie implementation
+            responses_processed = response_text.strip().split("\n")
+            responses_processed = [
+                x.strip() for x in responses_processed if len(x.strip()) > 0
+            ]
+            
+            if not responses_processed:
+                raise ValueError("Empty response from proxy service")
+            
+            command = responses_processed[0].replace("Command:", "").strip()
+
+            # Remove quotes if they wrap the entire command
+            if command and command[0] == command[-1] and command[0] in ["'", '"', "`"]:
+                command = command[1:-1]
+
+            description = None
+            if explain and len(responses_processed) > 1:
+                for line in responses_processed[1:]:
+                    if "Description:" in line:
+                        description = line.split("Description:", 1)[1].strip()
+                        break
+
+            return command, description
+            
+        except Exception as e:
+            raise ValueError(f"Error processing proxy response: {str(e)}")
+    
+    def chat(self, message: str, context: dict = None):
+        """Generate conversational response using the proxy service."""
+        # Build context information
+        context_text = ""
+        if context:
+            context_lines = [
+                "Current Context:",
+                f"- Working Directory: {context.get('current_directory', 'Unknown')}",
+                f"- OS: {context.get('system_info', {}).get('os', self.os_fullname)}",
+                f"- Shell: {context.get('system_info', {}).get('shell_name', self.shell)}",
+            ]
+            
+            if "directory_contents" in context and context["directory_contents"]:
+                contents_preview = ", ".join(context["directory_contents"][:10])
+                if len(context["directory_contents"]) > 10:
+                    contents_preview += "..."
+                context_lines.append(f"- Directory Contents: {contents_preview}")
+            
+            context_text = "\n".join(context_lines) + "\n\n"
+
+        # Add conversation history if available
+        history_text = ""
+        if context and "conversation_history" in context and context["conversation_history"]:
+            history_lines = ["Recent conversation:"]
+            for msg in context["conversation_history"][-6:]:  # Last 3 exchanges
+                role_label = "User" if msg["role"] == "user" else "Assistant"
+                history_lines.append(f"{role_label}: {msg['content']}")
+            history_text = "\n".join(history_lines) + "\n\n"
+
+        prompt = f"""{context_text}{history_text}You are Star Shell, an AI assistant that helps users with command line tasks. 
+
+The user said: "{message}"
+
+Analyze this message and respond appropriately:
+
+1. If the user is asking for a command to be executed, respond with:
+   COMMAND: <the_command_here>
+   DESCRIPTION: <explanation_of_what_it_does>
+
+2. If the user is asking a question, having a conversation, or needs information, respond with:
+   TEXT: <your_natural_language_response>
+
+3. If the user says "help", respond with information about Star Shell capabilities.
+
+Make sure commands work on {self.os_fullname} using {self.shell}. Be helpful and conversational."""
+
+        try:
+            response_text = self._make_proxy_request(prompt, max_tokens=400, temperature=0.3)
+            
+            # Parse the response
+            if response_text.startswith("COMMAND:"):
+                lines = response_text.split("\n")
+                command = lines[0].replace("COMMAND:", "").strip()
+                description = None
+                
+                for line in lines[1:]:
+                    if line.startswith("DESCRIPTION:"):
+                        description = line.replace("DESCRIPTION:", "").strip()
+                        break
+                
+                return "command", command, description
+            elif response_text.startswith("TEXT:"):
+                text_response = response_text.replace("TEXT:", "").strip()
+                return "text", text_response, None
+            else:
+                # Fallback - treat as text response
+                return "text", response_text, None
+                
+        except Exception as e:
+            raise ValueError(f"Error processing proxy chat response: {str(e)}")
