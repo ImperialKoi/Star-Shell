@@ -76,8 +76,8 @@ def init():
             default="gemini-pro"
         )
         
-        # Default backend URL - replace with your deployed service URL
-        backend_url = "https://your-star-shell-backend.onrender.com"  # Replace with your actual Render URL
+        # Default backend URL - replace with your deployed Vercel URL
+        backend_url = "https://star-shell-backend.vercel.app/"  # Replace with your actual Vercel URL
         
         # Test connection to proxy service
         print("[yellow]Testing connection to Star Shell backend...[/yellow]")

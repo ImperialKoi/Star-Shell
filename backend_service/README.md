@@ -1,98 +1,171 @@
-# Star Shell Backend Service
+# Star Shell Vercel Backend
 
-This is a secure proxy service that manages your Gemini API keys with automatic rotation and error handling.
+Deploy your Star Shell backend to Vercel for free with no credit card required.
 
-## Features
+## 🚀 Complete Deployment Guide
 
-- **Key Rotation**: Automatically rotates between 5 API keys
-- **Error Recovery**: Skips failed keys and retries with others
-- **Rate Limit Handling**: Intelligent handling of quota limits
-- **Secure**: API keys never exposed to end users
-- **Monitoring**: Usage statistics and health checks
+### Step 1: Prepare Your Repository
 
-## Local Development
-
-1. **Set up environment**:
+1. **Navigate to backend directory**:
    ```bash
    cd backend_service
-   cp .env.example .env
-   # Edit .env with your actual API keys
    ```
 
-2. **Install dependencies**:
+2. **Initialize Git repository**:
    ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Run locally**:
-   ```bash
-   python app.py
-   ```
-
-## Deployment Options
-
-### Option 1: Heroku (Recommended)
-
-1. **Install Heroku CLI** and login
-2. **Create app**:
-   ```bash
-   heroku create your-star-shell-backend
-   ```
-
-3. **Set environment variables**:
-   ```bash
-   heroku config:set GEMINI_KEY_1=your_first_key
-   heroku config:set GEMINI_KEY_2=your_second_key
-   heroku config:set GEMINI_KEY_3=your_third_key
-   heroku config:set GEMINI_KEY_4=your_fourth_key
-   heroku config:set GEMINI_KEY_5=your_fifth_key
-   heroku config:set STAR_SHELL_SECRET=secret-3.14159
-   ```
-
-4. **Deploy**:
-   ```bash
+   git init
    git add .
-   git commit -m "Initial deployment"
-   heroku git:remote -a your-star-shell-backend
-   git push heroku main
+   git commit -m "Star Shell Vercel backend"
    ```
 
-### Option 2: Railway
+3. **Create GitHub repository**:
+   - Go to [github.com](https://github.com) and create a new repository
+   - Name it `star-shell-backend` (or any name you prefer)
+   - Don't initialize with README (we already have files)
 
-1. **Connect your GitHub repo** to Railway
-2. **Set environment variables** in Railway dashboard
-3. **Deploy automatically** on push
+4. **Push to GitHub**:
+   ```bash
+   git remote add origin https://github.com/YOUR_USERNAME/star-shell-backend.git
+   git branch -M main
+   git push -u origin main
+   ```
 
-### Option 3: DigitalOcean App Platform
+### Step 2: Deploy to Vercel
 
-1. **Create new app** from GitHub repo
-2. **Set environment variables**
-3. **Deploy**
+1. **Go to Vercel**:
+   - Visit [vercel.com](https://vercel.com)
+   - Click "Sign up" and choose "Continue with GitHub"
+   - No credit card required!
 
-## Security Notes
+2. **Import Project**:
+   - Click "New Project"
+   - Find your `star-shell-backend` repository
+   - Click "Import"
 
-- API keys are stored as environment variables, never in code
-- The secret token (`secret-3.14159`) provides access control
-- All requests are logged for monitoring
-- Keys are automatically rotated to prevent overuse
+3. **Configure Project**:
+   - **Project Name**: `star-shell-backend` (or your choice)
+   - **Framework Preset**: Other
+   - **Root Directory**: `./` (leave as default)
+   - Click "Deploy"
 
-## API Endpoints
+### Step 3: Add Environment Variables
 
-- `GET /health` - Health check
-- `POST /api/generate` - Generate content (requires Bearer token)
-- `GET /api/stats` - Usage statistics (requires Bearer token)
+1. **Go to Project Settings**:
+   - After deployment, go to your project dashboard
+   - Click "Settings" tab
+   - Click "Environment Variables" in the sidebar
 
-## Monitoring
+2. **Add Your API Keys**:
+   ```
+   Variable Name: GEMINI_KEY_1
+   Value: your_first_gemini_api_key_here
+   
+   Variable Name: GEMINI_KEY_2
+   Value: your_second_gemini_api_key_here
+   
+   Variable Name: GEMINI_KEY_3
+   Value: your_third_gemini_api_key_here
+   
+   Variable Name: GEMINI_KEY_4
+   Value: your_fourth_gemini_api_key_here
+   
+   Variable Name: GEMINI_KEY_5
+   Value: your_fifth_gemini_api_key_here
+   
+   Variable Name: STAR_SHELL_SECRET
+   Value: secret-3.14159
+   ```
 
-Check your deployment logs to monitor:
-- Key rotation patterns
-- Error rates
-- Usage statistics
-- Performance metrics
+3. **Redeploy**:
+   - Go to "Deployments" tab
+   - Click the three dots on the latest deployment
+   - Click "Redeploy"
 
-## Cost Management
+### Step 4: Test Your Deployment
 
+Your backend will be available at: `https://your-project-name.vercel.app`
+
+Test the health endpoint:
+```bash
+curl https://your-project-name.vercel.app/health
+```
+
+Expected response:
+```json
+{
+  "status": "healthy",
+  "keys_available": 5,
+  "timestamp": "2024-01-01T12:00:00.000000"
+}
+```
+
+### Step 5: Update Star Shell
+
+1. **Get your Vercel URL** from the deployment dashboard
+2. **Update `star_shell/main.py`**:
+   ```python
+   backend_url = "https://your-actual-project-name.vercel.app"
+   ```
+
+### Step 6: Test the Secret Option
+
+1. **Rebuild and install** your updated Star Shell:
+   ```bash
+   # In your main project directory
+   pip install --upgrade dist/star_shell-0.2.1-py3-none-any.whl
+   ```
+
+2. **Test the secret backend**:
+   ```bash
+   star-shell init
+   # When prompted for backend, enter: secret-3.14159
+   ```
+
+## 📁 Project Structure
+
+```
+backend_service/
+├── api/
+│   ├── health.py      # Health check endpoint (/health)
+│   └── generate.py    # Main API endpoint (/api/generate)
+├── vercel.json        # Vercel configuration
+├── requirements.txt   # Python dependencies
+├── .env.example       # Environment variables template
+└── README.md          # This guide
+```
+
+## 🔧 How It Works
+
+- **Serverless Functions**: Each `.py` file in `api/` becomes an endpoint
+- **No Sleep**: Functions run on-demand, always responsive
+- **Global CDN**: Fast response times worldwide
+- **Automatic Scaling**: Handles traffic spikes automatically
+
+## 🎯 Benefits
+
+- ✅ **Free forever** - no credit card required
+- ✅ **No sleep issues** - always fast
+- ✅ **Professional infrastructure**
+- ✅ **Automatic HTTPS**
+- ✅ **Global edge network**
+- ✅ **Easy updates** via GitHub
+
+## 🚨 Important Notes
+
+- Keep your environment variables secure
 - Monitor your Gemini API usage in Google Cloud Console
-- Set up billing alerts
-- The service automatically distributes load across keys
-- Failed keys are temporarily disabled to prevent waste
+- Vercel free tier includes 100GB bandwidth and generous function limits
+- Perfect for your secret backend use case
+
+## 🔄 Making Updates
+
+To update your backend:
+1. Make changes to your code
+2. Push to GitHub: `git push`
+3. Vercel automatically redeploys!
+
+## 📊 Monitoring
+
+- Check Vercel dashboard for function logs
+- Monitor API usage in Google Cloud Console
+- Set up billing alerts for your Gemini API keys

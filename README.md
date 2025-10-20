@@ -45,10 +45,20 @@ pip install star-shell
 - `star-shell run` - Start the interactive AI terminal
 - `star-shell ask "your request"` - Generate a specific command
 
+## Backend Options
+
+During initialization, you can choose from:
+1. **OpenAI GPT-3.5 Turbo** - Reliable, requires API key
+2. **Gemini Pro** - Google's flagship model, requires API key  
+3. **Gemini Flash** - Faster Google model, requires API key
+4. **Secret option** - For special access (contact developer)
+
 ## Supported AI Backends
 
 - **OpenAI GPT-3.5 Turbo** - Requires OpenAI API key
 - **Google Gemini Pro** - Requires Google AI API key
+- **Google Gemini Flash** - Requires Google AI API key (faster, optimized model)
+- **Secret Backend** - Free access for select users (no API key needed)
 
 ## Safety Features
 
