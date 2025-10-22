@@ -89,7 +89,7 @@ class SessionManager:
             - mode, /mode: Interactive backend selection
             - status, /status: Current session information  
             - help, /help: Display help information
-            - /gpt, /gemini, /flash, /thinking, /secret: Quick mode switches
+            - /gpt, /gemini (menu), /flash, /thinking, /secret, /secret-temp: Quick mode switches
         
         Note:
             Commands are case-insensitive and leading/trailing whitespace is ignored.
@@ -125,7 +125,7 @@ class SessionManager:
             return True
         
         # Handle quick mode switching shortcuts
-        quick_commands = ['/gpt', '/gemini', '/flash', '/thinking', '/secret']
+        quick_commands = ['/gpt', '/gemini', '/flash', '/thinking', '/secret', '/secret-temp']
         if command in quick_commands:
             return self._handle_quick_mode_switch(command)
         
@@ -210,10 +210,17 @@ class SessionManager:
     
     def _handle_quick_mode_switch(self, command: str) -> bool:
         """Handle quick mode switching shortcuts like /gpt, /gemini, etc."""
-        # Map quick commands to modes
+        # Special handling for /gemini - show Gemini model selection
+        if command == '/gemini':
+            return self._handle_gemini_mode_selection()
+        
+        # Special handling for temporary secret mode
+        if command == '/secret-temp':
+            return self._handle_temporary_secret_mode()
+        
+        # Map other quick commands to modes
         quick_mapping = {
             '/gpt': 'openai-gpt-3.5-turbo',
-            '/gemini': 'gemini-pro',
             '/flash': 'gemini-flash',
             '/thinking': 'gemini-thinking',
             '/secret': 'secret-3.14159'
@@ -230,6 +237,113 @@ class SessionManager:
             return True
         
         return self._switch_to_mode(target_mode)
+    
+    def _handle_gemini_mode_selection(self) -> bool:
+        """Handle /gemini command by showing Gemini model selection menu."""
+        from rich.prompt import Prompt
+        
+        # Show current mode
+        current_mode = self.mode_manager.get_current_mode()
+        current_display = self.mode_manager.get_mode_display_name(current_mode)
+        
+        self.console.print(f"\n[bold blue]Gemini Model Selection[/bold blue]")
+        self.console.print(f"[dim]Current mode: {current_display}[/dim]\n")
+        
+        # Show available Gemini models
+        gemini_options = {
+            "1": ("gemini-pro", "Gemini Pro - Google's advanced model with strong reasoning"),
+            "2": ("gemini-flash", "Gemini Flash - Faster responses with good performance"), 
+            "3": ("gemini-thinking", "Gemini Thinking - Adaptive planning for complex multi-step tasks")
+        }
+        
+        for key, (mode, description) in gemini_options.items():
+            current_indicator = " [green](current)[/green]" if current_mode == mode else ""
+            self.console.print(f"[bold cyan]{key}.[/bold cyan] {description}{current_indicator}")
+        
+        self.console.print(f"[bold cyan]0.[/bold cyan] Cancel")
+        
+        try:
+            choice = Prompt.ask("\nSelect Gemini model", choices=["0", "1", "2", "3"], default="0")
+            
+            if choice == "0":
+                self.console.print("[yellow]Selection cancelled.[/yellow]")
+                return True
+            
+            target_mode, _ = gemini_options[choice]
+            
+            # Check if already using selected mode
+            if current_mode == target_mode:
+                display_name = self.mode_manager.get_mode_display_name(target_mode)
+                self.console.print(f"[yellow]Already using {display_name}[/yellow]")
+                return True
+            
+            return self._switch_to_mode(target_mode)
+            
+        except KeyboardInterrupt:
+            self.console.print("\n[yellow]Selection cancelled.[/yellow]")
+            return True
+        except Exception as e:
+            self.console.print(f"[red]Error in model selection: {str(e)}[/red]")
+            return True
+    
+    def _handle_temporary_secret_mode(self) -> bool:
+        """Handle temporary secret mode - use secret backend for next query only."""
+        current_mode = self.mode_manager.get_current_mode()
+        current_display = self.mode_manager.get_mode_display_name(current_mode)
+        
+        self.console.print(f"\n[bold blue]Temporary Secret Mode[/bold blue]")
+        self.console.print(f"[dim]Current mode: {current_display}[/dim]")
+        self.console.print("[yellow]Next query will use the secret backend, then return to your current mode.[/yellow]")
+        
+        # Store the current backend for restoration
+        self._temp_mode_restore = {
+            'mode': current_mode,
+            'genie': self.genie
+        }
+        
+        # Switch to secret mode temporarily
+        credentials = {
+            "backend_url": "https://star-shell-backend.vercel.app/",
+            "secret_token": "secret-3.14159",
+            "model_type": "gemini-pro"
+        }
+        
+        try:
+            # Create temporary secret genie
+            from star_shell.backend import ProxyGenie
+            os_fullname = getattr(self.genie, 'os_fullname', 'Unknown OS')
+            shell = getattr(self.genie, 'shell', 'bash')
+            
+            temp_genie = ProxyGenie(
+                credentials["backend_url"], 
+                credentials["secret_token"], 
+                os_fullname, 
+                shell, 
+                credentials["model_type"]
+            )
+            
+            if temp_genie.validate_credentials():
+                self.genie = temp_genie
+                self._temp_mode_active = True
+                self.console.print("[green]✓ Temporary secret mode activated. Enter your query:[/green]")
+                return True
+            else:
+                self.console.print("[red]✗ Failed to connect to secret backend[/red]")
+                return True
+                
+        except Exception as e:
+            self.console.print(f"[red]✗ Error activating temporary secret mode: {str(e)}[/red]")
+            return True
+    
+    def _restore_from_temporary_mode(self):
+        """Restore the original mode after temporary secret mode usage."""
+        if hasattr(self, '_temp_mode_restore') and hasattr(self, '_temp_mode_active'):
+            if self._temp_mode_active:
+                self.genie = self._temp_mode_restore['genie']
+                mode_display = self.mode_manager.get_mode_display_name(self._temp_mode_restore['mode'])
+                self.console.print(f"[dim]Restored to {mode_display} mode[/dim]")
+                self._temp_mode_active = False
+                delattr(self, '_temp_mode_restore')
     
     def _switch_to_mode(self, target_mode: str) -> bool:
         """
@@ -598,7 +712,7 @@ class SessionManager:
         status_text.append("   mode, /mode - Switch AI backend\n", style="dim")
         status_text.append("   status, /status - Show this status\n", style="dim")
         status_text.append("   help, /help - Show help information\n", style="dim")
-        status_text.append("   /gpt, /gemini, /flash, /thinking, /secret - Quick switches\n", style="dim")
+        status_text.append("   /gpt, /gemini, /flash, /thinking, /secret, /secret-temp - Quick switches\n", style="dim")
         
         self.console.print(Panel(
             status_text,
@@ -890,6 +1004,9 @@ class SessionManager:
         except Exception as e:
             self.console.print(f"[red]Error: {e}[/red]")
         
+        # Restore from temporary mode if active
+        self._restore_from_temporary_mode()
+        
         return True
     
     def display_welcome(self):
@@ -972,7 +1089,7 @@ class SessionManager:
         help_text.append(" - Quick switch to OpenAI GPT-3.5 Turbo (fast, reliable)\n", style="white")
         help_text.append("• ", style="cyan")
         help_text.append("/gemini", style="bold cyan")
-        help_text.append(" - Quick switch to Gemini Pro (advanced reasoning)\n", style="white")
+        help_text.append(" - Show Gemini model selection menu (Pro/Flash/Thinking)\n", style="white")
         help_text.append("• ", style="cyan")
         help_text.append("/flash", style="bold cyan")
         help_text.append(" - Quick switch to Gemini Flash (faster responses)\n", style="white")
@@ -981,7 +1098,10 @@ class SessionManager:
         help_text.append(" - Quick switch to Gemini Thinking (adaptive planning)\n", style="white")
         help_text.append("• ", style="cyan")
         help_text.append("/secret", style="bold cyan")
-        help_text.append(" - Quick switch to Secret Backend (no API key needed)\n\n", style="white")
+        help_text.append(" - Quick switch to Secret Backend (no API key needed)\n", style="white")
+        help_text.append("• ", style="cyan")
+        help_text.append("/secret-temp", style="bold cyan")
+        help_text.append(" - Use secret backend for next query only, then restore current mode\n\n", style="white")
         
         # Mode Switching Tips
         help_text.append("Mode Switching Tips:\n", style="bold yellow")
