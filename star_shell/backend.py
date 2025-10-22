@@ -294,6 +294,8 @@ class GeminiGenie(BaseGenie):
         # Choose model based on backend type
         if backend_type == "gemini-flash":
             model_name = 'gemini-2.0-flash-exp'
+        elif backend_type == "gemini-thinking":
+            model_name = 'gemini-2.5-pro'  # Use Pro for thinking mode
         else:
             model_name = 'gemini-2.5-pro'
             
@@ -469,6 +471,229 @@ Make sure commands work on {self.os_fullname} using {self.shell}. Be helpful and
                 
         except Exception as e:
             raise ValueError(f"Error processing Gemini chat response: {str(e)}")
+
+
+class GeminiThinkingGenie(BaseGenie):
+    """Gemini with adaptive thinking - creates plans and executes step by step"""
+    
+    def __init__(self, api_key: str, os_fullname: str, shell: str):
+        self.os_fullname = os_fullname
+        self.shell = shell
+        self.api_key = api_key
+        genai.configure(api_key=api_key)
+        self.model = genai.GenerativeModel('gemini-2.5-pro')
+        self.current_plan = None
+        self.current_step = 0
+        self.execution_history = []
+    
+    def validate_credentials(self) -> bool:
+        """Validate the Gemini API key by making a test request."""
+        try:
+            test_response = self.model.generate_content("Hello")
+            return test_response is not None
+        except Exception:
+            return False
+    
+    def _make_api_request(self, prompt: str) -> str:
+        """Make API request to Gemini Pro and return the response text."""
+        try:
+            response = self.model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            raise ValueError(f"Error communicating with Gemini API: {str(e)}")
+    
+    def create_plan(self, user_request: str, context: dict = None) -> list:
+        """Create a step-by-step plan for the user's request."""
+        # Build context information
+        context_text = ""
+        if context:
+            context_lines = [
+                "Current Context:",
+                f"- Working Directory: {context.get('current_directory', 'Unknown')}",
+                f"- OS: {context.get('system_info', {}).get('os', self.os_fullname)}",
+                f"- Shell: {context.get('system_info', {}).get('shell_name', self.shell)}",
+            ]
+            
+            if "directory_contents" in context and context["directory_contents"]:
+                contents_preview = ", ".join(context["directory_contents"][:10])
+                if len(context["directory_contents"]) > 10:
+                    contents_preview += "..."
+                context_lines.append(f"- Directory Contents: {contents_preview}")
+            
+            context_text = "\n".join(context_lines) + "\n\n"
+
+        planning_prompt = f"""{context_text}You are Star Shell, an AI assistant that creates step-by-step execution plans.
+
+User Request: "{user_request}"
+
+Create a detailed step-by-step plan to fulfill this request. Each step should be a single, specific action that can be executed independently.
+
+Respond with a numbered list in this format:
+PLAN:
+1. [Brief description of step 1]
+2. [Brief description of step 2]
+3. [Brief description of step 3]
+...
+
+Guidelines:
+- Each step should be atomic and executable
+- Steps should build on previous steps
+- Consider the current context and environment
+- Be specific about what each step accomplishes
+- Maximum 10 steps for clarity
+
+Make sure all steps work on {self.os_fullname} using {self.shell}."""
+
+        try:
+            response = self._make_api_request(planning_prompt)
+            
+            # Parse the plan
+            if "PLAN:" in response:
+                plan_text = response.split("PLAN:")[1].strip()
+                steps = []
+                
+                for line in plan_text.split("\n"):
+                    line = line.strip()
+                    if line and line[0].isdigit() and "." in line:
+                        step_desc = line.split(".", 1)[1].strip()
+                        steps.append(step_desc)
+                
+                return steps
+            else:
+                # Fallback parsing
+                lines = response.strip().split("\n")
+                steps = []
+                for line in lines:
+                    line = line.strip()
+                    if line and line[0].isdigit() and "." in line:
+                        step_desc = line.split(".", 1)[1].strip()
+                        steps.append(step_desc)
+                return steps
+                
+        except Exception as e:
+            raise ValueError(f"Error creating plan: {str(e)}")
+    
+    def execute_next_step(self, context: dict = None) -> tuple:
+        """Execute the next step in the plan based on current context and history."""
+        if not self.current_plan or self.current_step >= len(self.current_plan):
+            return "text", "Plan completed or no plan available.", None
+        
+        current_step_desc = self.current_plan[self.current_step]
+        
+        # Build context with execution history
+        context_text = ""
+        if context:
+            context_lines = [
+                "Current Context:",
+                f"- Working Directory: {context.get('current_directory', 'Unknown')}",
+                f"- OS: {context.get('system_info', {}).get('os', self.os_fullname)}",
+                f"- Shell: {context.get('system_info', {}).get('shell_name', self.shell)}",
+            ]
+            
+            if "directory_contents" in context and context["directory_contents"]:
+                contents_preview = ", ".join(context["directory_contents"][:10])
+                if len(context["directory_contents"]) > 10:
+                    contents_preview += "..."
+                context_lines.append(f"- Directory Contents: {contents_preview}")
+            
+            context_text = "\n".join(context_lines) + "\n\n"
+        
+        # Add execution history
+        history_text = ""
+        if self.execution_history:
+            history_text = "Previous Steps Executed:\n"
+            for i, hist in enumerate(self.execution_history, 1):
+                history_text += f"{i}. Command: {hist['command']}\n"
+                if hist['success']:
+                    history_text += f"   Result: Success - {hist['output'][:100]}...\n"
+                else:
+                    history_text += f"   Result: Failed - {hist['error'][:100]}...\n"
+            history_text += "\n"
+        
+        execution_prompt = f"""{context_text}{history_text}You are executing step {self.current_step + 1} of a plan.
+
+Current Step: "{current_step_desc}"
+
+Full Plan Context:
+{chr(10).join([f"{i+1}. {step}" for i, step in enumerate(self.current_plan)])}
+
+Based on the current context and previous execution results, generate the specific command to execute this step.
+
+Respond with:
+COMMAND: <the_specific_command_to_run>
+DESCRIPTION: <brief explanation of what this command does>
+
+Make sure the command works on {self.os_fullname} using {self.shell} and considers the current state."""
+
+        try:
+            response = self._make_api_request(execution_prompt)
+            response_type, content, description = parse_ai_response(response)
+            
+            if response_type == "command":
+                return response_type, content, description
+            else:
+                # If AI doesn't return a command, treat as completion
+                return "text", f"Step {self.current_step + 1} completed: {current_step_desc}", None
+                
+        except Exception as e:
+            raise ValueError(f"Error executing step: {str(e)}")
+    
+    def record_execution(self, command: str, success: bool, output: str = "", error: str = ""):
+        """Record the result of command execution."""
+        self.execution_history.append({
+            'step': self.current_step,
+            'command': command,
+            'success': success,
+            'output': output,
+            'error': error
+        })
+        self.current_step += 1
+    
+    def reset_plan(self):
+        """Reset the current plan and execution state."""
+        self.current_plan = None
+        self.current_step = 0
+        self.execution_history = []
+    
+    def ask(self, wish: str, explain: bool = False, context: dict = None):
+        """For compatibility - delegates to regular Gemini behavior."""
+        # Use regular Gemini logic for simple ask requests
+        return super().ask(wish, explain, context)
+    
+    def chat(self, message: str, context: dict = None):
+        """Enhanced chat that can create plans and execute them step by step."""
+        # Check if this is a request that needs planning
+        if self._needs_planning(message):
+            # Create a new plan
+            self.reset_plan()
+            try:
+                self.current_plan = self.create_plan(message, context)
+                if self.current_plan:
+                    plan_text = "\n".join([f"{i+1}. {step}" for i, step in enumerate(self.current_plan)])
+                    return "plan", {
+                        "plan": self.current_plan,
+                        "description": f"Created execution plan with {len(self.current_plan)} steps:\n{plan_text}"
+                    }, None
+                else:
+                    return "text", "I couldn't create a plan for that request. Could you be more specific?", None
+            except Exception as e:
+                return "text", f"Error creating plan: {str(e)}", None
+        else:
+            # Use regular chat for simple questions/conversations
+            return parse_ai_response(self._make_api_request(
+                build_multi_command_prompt("", "", message, self.os_fullname, self.shell)
+            ))
+    
+    def _needs_planning(self, message: str) -> bool:
+        """Determine if a message needs multi-step planning."""
+        planning_keywords = [
+            "create", "setup", "install", "build", "deploy", "configure", 
+            "initialize", "prepare", "organize", "clean up", "backup",
+            "and then", "after that", "next", "followed by", "step by step"
+        ]
+        
+        message_lower = message.lower()
+        return any(keyword in message_lower for keyword in planning_keywords) or len(message.split()) > 8
 
 
 class ProxyGenie(BaseGenie):

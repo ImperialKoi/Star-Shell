@@ -8,6 +8,7 @@ An AI-powered command line assistant that generates and executes shell commands 
 - 💬 **Interactive Terminal**: Natural conversation with command execution
 - 🧠 **Smart Responses**: AI decides whether to run commands or provide information
 - 🔄 **Multi-Command Support**: Execute multiple commands in sequence automatically
+- 🧠 **Adaptive Planning**: Gemini Thinking mode creates plans and adapts based on real execution results
 - 🛡️ **Safety First**: Built-in command safety checks and confirmations
 - 🎯 **Context Aware**: Understands your current directory and system environment
 - 🔒 **Secure**: Encrypted API key storage
@@ -34,16 +35,23 @@ pip install star-shell
    ```
    This opens an AI-powered terminal where you can chat and get commands executed.
 
-3. **Or ask for specific commands**:
+3. **Switch modes anytime**:
+   ```bash
+   star-shell mode
+   ```
+   Change between OpenAI, Gemini Pro, Gemini Flash, or Gemini Thinking modes.
+
+4. **Or ask for specific commands**:
    ```bash
    star-shell ask "list all Python files in this directory"
    ```
 
 ## Commands
 
-- `star-shell` - Shows status and quick help
+- `star-shell` - Shows status and current mode
 - `star-shell init` - Set up your AI backend and API keys  
 - `star-shell run` - Start the interactive AI terminal
+- `star-shell mode` - Switch between different AI backends/modes
 - `star-shell ask "your request"` - Generate a specific command
 
 ## Backend Options
@@ -52,13 +60,15 @@ During initialization, you can choose from:
 1. **OpenAI GPT-3.5 Turbo** - Reliable, requires API key
 2. **Gemini Pro** - Google's flagship model, requires API key  
 3. **Gemini Flash** - Faster Google model, requires API key
-4. **Secret option** - For special access (contact developer)
+4. **Gemini Thinking** - Adaptive planning with step-by-step execution, requires API key
+5. **Secret option** - For special access (contact developer)
 
 ## Supported AI Backends
 
 - **OpenAI GPT-3.5 Turbo** - Requires OpenAI API key
 - **Google Gemini Pro** - Requires Google AI API key
 - **Google Gemini Flash** - Requires Google AI API key (faster, optimized model)
+- **Google Gemini Thinking** - Adaptive multi-step execution with planning (requires Google AI API key)
 - **Secret Backend** - Free access for select users (no API key needed)
 
 ## Safety Features
@@ -81,6 +91,14 @@ star-shell run
 # AI will offer to execute multiple commands:
 # 1. mkdir new_directory
 # 2. cd new_directory
+
+⭐ > set up a complete Python project (Gemini Thinking mode)
+# AI creates adaptive plan:
+# 1. Create project directory
+# 2. Initialize virtual environment  
+# 3. Create requirements.txt
+# 4. Set up project structure
+# Then executes each step, adapting based on results
 
 ⭐ > what's the difference between git merge and rebase?
 # AI will explain the concepts in natural language
