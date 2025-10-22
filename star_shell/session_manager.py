@@ -89,7 +89,7 @@ class SessionManager:
             response_type, content, description = self.genie.chat(user_input, context=context)
             
             if response_type == "command":
-                # AI wants to execute a command
+                # AI wants to execute a single command
                 self.add_to_history("assistant", f"Command: {content}" + (f"\nDescription: {description}" if description else ""))
                 
                 # Display the command
@@ -111,6 +111,79 @@ class SessionManager:
                         self.console.print("[yellow]Command execution cancelled due to safety concerns.[/yellow]")
                 else:
                     self.console.print("[yellow]Command execution cancelled by user.[/yellow]")
+                    
+            elif response_type == "commands":
+                # AI wants to execute multiple commands in sequence
+                commands_list = content  # This is a list of command dictionaries
+                
+                # Display all commands first
+                self.console.print(Panel(
+                    f"[bold blue]⭐ Star Shell wants to execute {len(commands_list)} commands in sequence:[/bold blue]",
+                    border_style="blue",
+                    padding=(0, 1)
+                ))
+                
+                for i, cmd_info in enumerate(commands_list, 1):
+                    self.console.print(f"\n[bold cyan]{i}.[/bold cyan] [white]{cmd_info['command']}[/white]")
+                    if cmd_info['description']:
+                        self.console.print(f"   [dim]{cmd_info['description']}[/dim]")
+                
+                # Ask if user wants to execute all commands
+                from rich.prompt import Confirm
+                if Confirm.ask(f"\n[bold blue]Execute all {len(commands_list)} commands in sequence?[/bold blue]"):
+                    
+                    # Execute commands one by one
+                    all_successful = True
+                    execution_results = []
+                    
+                    for i, cmd_info in enumerate(commands_list, 1):
+                        command = cmd_info['command']
+                        cmd_description = cmd_info['description']
+                        
+                        self.console.print(f"\n[bold blue]Executing command {i}/{len(commands_list)}:[/bold blue] [white]{command}[/white]")
+                        
+                        # Check command safety
+                        if not self.executor.check_command_safety(command):
+                            self.console.print(f"[yellow]Command {i} cancelled due to safety concerns.[/yellow]")
+                            all_successful = False
+                            break
+                        
+                        # Execute the command
+                        return_code, stdout, stderr = self.executor.execute_command(command)
+                        self.executor.display_execution_result(return_code, stdout, stderr)
+                        
+                        # Track results
+                        execution_results.append({
+                            'command': command,
+                            'return_code': return_code,
+                            'stdout': stdout[:200],
+                            'stderr': stderr[:200]
+                        })
+                        
+                        if return_code != 0:
+                            self.console.print(f"[red]Command {i} failed. Stopping execution sequence.[/red]")
+                            all_successful = False
+                            break
+                        
+                        # Small delay between commands
+                        import time
+                        time.sleep(0.5)
+                    
+                    # Add execution summary to history
+                    if all_successful:
+                        self.add_to_history("system", f"Successfully executed {len(commands_list)} commands in sequence")
+                        self.console.print(f"\n[green]✅ All {len(commands_list)} commands executed successfully![/green]")
+                    else:
+                        failed_at = len(execution_results)
+                        self.add_to_history("system", f"Command sequence failed at step {failed_at}")
+                        self.console.print(f"\n[red]❌ Command sequence stopped at step {failed_at}[/red]")
+                    
+                    # Add to conversation history
+                    commands_summary = "; ".join([cmd['command'] for cmd in commands_list])
+                    self.add_to_history("assistant", f"Commands: {commands_summary}")
+                    
+                else:
+                    self.console.print("[yellow]Command sequence cancelled by user.[/yellow]")
                     
             elif response_type == "text":
                 # AI is responding with natural language
@@ -135,6 +208,8 @@ class SessionManager:
         welcome_text.append("I'm your AI assistant for command line tasks. You can:\n", style="white")
         welcome_text.append("• Ask me to run commands: ", style="cyan")
         welcome_text.append("'list all Python files'\n", style="white")
+        welcome_text.append("• Request multiple commands: ", style="cyan")
+        welcome_text.append("'create a directory and navigate to it'\n", style="white")
         welcome_text.append("• Have conversations: ", style="cyan")
         welcome_text.append("'What's the difference between git merge and rebase?'\n", style="white")
         welcome_text.append("• Get help: ", style="cyan")
@@ -163,10 +238,14 @@ class SessionManager:
         help_text.append(" - Exit Star Shell\n\n", style="white")
         
         help_text.append("Examples:\n", style="bold white")
+        help_text.append("Single commands:\n", style="bold white")
         help_text.append("• 'create a new directory called projects'\n", style="green")
         help_text.append("• 'show me all running processes'\n", style="green")
         help_text.append("• 'what does the ls command do?'\n", style="green")
-        help_text.append("• 'how do I check disk space?'\n", style="green")
+        help_text.append("\nMultiple commands:\n", style="bold white")
+        help_text.append("• 'create a directory and navigate to it'\n", style="green")
+        help_text.append("• 'install dependencies and run the project'\n", style="green")
+        help_text.append("• 'backup my files and clean up temp files'\n", style="green")
         
         self.console.print(Panel(
             help_text,

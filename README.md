@@ -7,6 +7,7 @@ An AI-powered command line assistant that generates and executes shell commands 
 - 🤖 **AI-Powered**: Uses OpenAI GPT or Google Gemini to understand your requests
 - 💬 **Interactive Terminal**: Natural conversation with command execution
 - 🧠 **Smart Responses**: AI decides whether to run commands or provide information
+- 🔄 **Multi-Command Support**: Execute multiple commands in sequence automatically
 - 🛡️ **Safety First**: Built-in command safety checks and confirmations
 - 🎯 **Context Aware**: Understands your current directory and system environment
 - 🔒 **Secure**: Encrypted API key storage
@@ -75,6 +76,11 @@ star-shell run
 
 ⭐ > create a new directory called projects
 # AI will generate and offer to execute: mkdir projects
+
+⭐ > create a directory and navigate to it
+# AI will offer to execute multiple commands:
+# 1. mkdir new_directory
+# 2. cd new_directory
 
 ⭐ > what's the difference between git merge and rebase?
 # AI will explain the concepts in natural language

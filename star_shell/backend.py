@@ -4,6 +4,104 @@ import requests
 import json
 
 
+def parse_ai_response(response_text):
+    """
+    Parse AI response and return (response_type, content, description).
+    Handles single commands, multiple commands, and text responses.
+    """
+    response_text = response_text.strip()
+    
+    if response_text.startswith("COMMAND:"):
+        lines = response_text.split("\n")
+        command = lines[0].replace("COMMAND:", "").strip()
+        description = None
+        
+        for line in lines[1:]:
+            if line.startswith("DESCRIPTION:"):
+                description = line.replace("DESCRIPTION:", "").strip()
+                break
+        
+        return "command", command, description
+        
+    elif response_text.startswith("COMMANDS:"):
+        # Parse multiple commands
+        lines = response_text.split("\n")
+        commands = []
+        current_command = None
+        current_description = None
+        
+        for line in lines[1:]:  # Skip the "COMMANDS:" line
+            line = line.strip()
+            if not line:
+                continue
+                
+            # Check if this is a numbered command
+            if line.startswith(tuple(f"{i}." for i in range(1, 20))):
+                # Save previous command if exists
+                if current_command:
+                    commands.append({
+                        "command": current_command,
+                        "description": current_description or "No description provided"
+                    })
+                
+                # Extract new command (remove number prefix)
+                current_command = line.split(".", 1)[1].strip()
+                current_description = None
+                
+            elif line.startswith("DESCRIPTION:"):
+                current_description = line.replace("DESCRIPTION:", "").strip()
+        
+        # Add the last command
+        if current_command:
+            commands.append({
+                "command": current_command,
+                "description": current_description or "No description provided"
+            })
+        
+        return "commands", commands, None
+        
+    elif response_text.startswith("TEXT:"):
+        text_response = response_text.replace("TEXT:", "").strip()
+        return "text", text_response, None
+        
+    else:
+        # Fallback - treat as text response
+        return "text", response_text, None
+
+
+def build_multi_command_prompt(context_text, history_text, message, os_fullname, shell):
+    """Build a prompt that supports both single and multiple commands."""
+    return f"""{context_text}{history_text}You are Star Shell, an AI assistant that helps users with command line tasks. 
+
+The user said: "{message}"
+
+Analyze this message and respond appropriately:
+
+1. If the user is asking for a SINGLE command to be executed, respond with:
+   COMMAND: <the_command_here>
+   DESCRIPTION: <explanation_of_what_it_does>
+
+2. If the user is asking for MULTIPLE commands to be executed in sequence, respond with:
+   COMMANDS:
+   1. <first_command_here>
+   DESCRIPTION: <explanation_of_first_command>
+   2. <second_command_here>
+   DESCRIPTION: <explanation_of_second_command>
+   (continue for more commands...)
+
+3. If the user is asking a question, having a conversation, or needs information, respond with:
+   TEXT: <your_natural_language_response>
+
+4. If the user says "help", respond with information about Star Shell capabilities.
+
+Examples of multi-command requests:
+- "create a new directory and navigate to it"
+- "install dependencies and run the project"
+- "backup my files and then clean up temporary files"
+
+Make sure commands work on {os_fullname} using {shell}. Be helpful and conversational."""
+
+
 class BaseGenie:
     def __init__(self):
         pass
@@ -15,9 +113,12 @@ class BaseGenie:
         """
         Generate a conversational response that can be either a command or natural language.
         Returns (response_type, content, description) where:
-        - response_type: 'command' or 'text'
-        - content: the command or natural language response
+        - response_type: 'command', 'commands', or 'text'
+        - content: the command(s) or natural language response
         - description: explanation (for commands) or None (for text)
+        
+        For multiple commands, content will be a list of command dictionaries:
+        [{"command": "cmd1", "description": "desc1"}, {"command": "cmd2", "description": "desc2"}]
         """
         raise NotImplementedError
 
@@ -175,24 +276,8 @@ Make sure commands work on {self.os_fullname} using {self.shell}. Be helpful and
         
         response_text = response["choices"][0]["message"]["content"].strip()
         
-        # Parse the response
-        if response_text.startswith("COMMAND:"):
-            lines = response_text.split("\n")
-            command = lines[0].replace("COMMAND:", "").strip()
-            description = None
-            
-            for line in lines[1:]:
-                if line.startswith("DESCRIPTION:"):
-                    description = line.replace("DESCRIPTION:", "").strip()
-                    break
-            
-            return "command", command, description
-        elif response_text.startswith("TEXT:"):
-            text_response = response_text.replace("TEXT:", "").strip()
-            return "text", text_response, None
-        else:
-            # Fallback - treat as text response
-            return "text", response_text, None
+        # Use the helper function to parse the response
+        return parse_ai_response(response_text)
 
 
 
