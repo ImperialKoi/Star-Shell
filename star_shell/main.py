@@ -386,17 +386,35 @@ def mode():
             return
             
     elif new_backend in ["gemini-pro", "gemini-flash", "gemini-thinking"]:
-        # Check if we already have a Gemini key
-        if "gemini_api_key" in current_config and current_config["gemini_api_key"]:
-            use_existing = Confirm.ask("Use existing Gemini API key?")
-            if use_existing:
-                additional_params["gemini_api_key"] = current_config["gemini_api_key"]
+        # Special case: If currently using secret backend, offer to stay on secret backend
+        if current_backend == "secret-3.14159":
+            use_secret = Confirm.ask(
+                f"[bold blue]Stay on secret backend and use {new_backend.replace('-', ' ').title()}?[/bold blue]",
+                default=True
+            )
+            if use_secret:
+                # Use secret backend with the new model type
+                additional_params["backend_url"] = current_config.get("backend_url", "https://star-shell-backend.vercel.app/")
+                additional_params["secret_token"] = current_config.get("secret_token", "secret-3.14159")
+                additional_params["model_type"] = new_backend
+                # Override the backend to stay as secret
+                new_backend = "secret-3.14159"
             else:
-                gemini_api_key = Prompt.ask("Enter a new Gemini API key")
+                # User wants to switch to real Gemini backend, ask for API key
+                gemini_api_key = Prompt.ask("Enter a Gemini API key")
                 additional_params["gemini_api_key"] = secure_storage.encrypt_api_key(gemini_api_key)
         else:
-            gemini_api_key = Prompt.ask("Enter a Gemini API key")
-            additional_params["gemini_api_key"] = secure_storage.encrypt_api_key(gemini_api_key)
+            # Check if we already have a Gemini key
+            if "gemini_api_key" in current_config and current_config["gemini_api_key"]:
+                use_existing = Confirm.ask("Use existing Gemini API key?")
+                if use_existing:
+                    additional_params["gemini_api_key"] = current_config["gemini_api_key"]
+                else:
+                    gemini_api_key = Prompt.ask("Enter a new Gemini API key")
+                    additional_params["gemini_api_key"] = secure_storage.encrypt_api_key(gemini_api_key)
+            else:
+                gemini_api_key = Prompt.ask("Enter a Gemini API key")
+                additional_params["gemini_api_key"] = secure_storage.encrypt_api_key(gemini_api_key)
     
     # Update configuration
     updated_config = current_config.copy()
