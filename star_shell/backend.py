@@ -709,8 +709,15 @@ class ProxyGenie(BaseGenie):
         # Map model types to actual model names
         self.model_map = {
             "gemini-pro": "gemini-2.5-pro",
-            "gemini-flash": "gemini-2.0-flash-exp"
+            "gemini-flash": "gemini-2.0-flash-exp",
+            "gemini-thinking": "gemini-2.5-pro"  # Use Pro model for thinking mode via proxy
         }
+        
+        # Add thinking capabilities if using gemini-thinking model
+        if model_type == "gemini-thinking":
+            self.current_plan = None
+            self.current_step = 0
+            self.execution_history = []
     
     def validate_credentials(self) -> bool:
         """Validate connection to the proxy service."""
@@ -907,3 +914,168 @@ Make sure commands work on {self.os_fullname} using {self.shell}. Be helpful and
                 
         except Exception as e:
             raise ValueError(f"Error processing proxy chat response: {str(e)}")
+    
+    # Thinking capabilities (only available when model_type is "gemini-thinking")
+    def create_plan(self, user_request: str, context: dict = None) -> list:
+        """Create a step-by-step plan for the user's request using the proxy service."""
+        if self.model_type != "gemini-thinking":
+            raise ValueError("Planning is only available in gemini-thinking mode")
+        
+        # Build context information
+        context_text = ""
+        if context:
+            context_lines = [
+                "Current Context:",
+                f"- Working Directory: {context.get('current_directory', 'Unknown')}",
+                f"- OS: {context.get('system_info', {}).get('os', self.os_fullname)}",
+                f"- Shell: {context.get('system_info', {}).get('shell_name', self.shell)}",
+            ]
+            
+            if "directory_contents" in context and context["directory_contents"]:
+                contents_preview = ", ".join(context["directory_contents"][:10])
+                if len(context["directory_contents"]) > 10:
+                    contents_preview += "..."
+                context_lines.append(f"- Directory Contents: {contents_preview}")
+            
+            context_text = "\n".join(context_lines) + "\n\n"
+
+        prompt = f"""{context_text}Create a detailed step-by-step plan to accomplish: {user_request}
+
+Break this down into specific, executable steps. Each step should be a single command or action.
+
+Format your response as:
+PLAN: [Brief description of the overall plan]
+STEP 1: [First command or action]
+STEP 2: [Second command or action]
+STEP 3: [Third command or action]
+... (continue as needed)
+
+Make sure each step is:
+1. A specific command that can be executed
+2. Appropriate for {self.os_fullname} using {self.shell}
+3. Logically ordered and dependent on previous steps
+4. Safe and follows best practices
+
+Focus on practical, executable commands rather than explanations."""
+
+        try:
+            response_text = self._make_proxy_request(prompt, max_tokens=800)
+            
+            # Parse the plan from the response
+            lines = [line.strip() for line in response_text.split('\n') if line.strip()]
+            
+            plan_description = ""
+            steps = []
+            
+            for line in lines:
+                if line.startswith("PLAN:"):
+                    plan_description = line.replace("PLAN:", "").strip()
+                elif line.startswith("STEP"):
+                    # Extract step content after the step number
+                    step_content = line.split(":", 1)[1].strip() if ":" in line else line
+                    steps.append(step_content)
+            
+            if not steps:
+                raise ValueError("No valid steps found in plan")
+            
+            # Store the plan
+            self.current_plan = steps
+            self.current_step = 0
+            self.execution_history = []
+            
+            return steps
+            
+        except Exception as e:
+            raise ValueError(f"Error creating plan: {str(e)}")
+    
+    def execute_next_step(self, context: dict = None) -> tuple:
+        """Execute the next step in the plan based on current context and history."""
+        if self.model_type != "gemini-thinking":
+            raise ValueError("Step execution is only available in gemini-thinking mode")
+            
+        if not self.current_plan or self.current_step >= len(self.current_plan):
+            return None, "Plan completed or no plan available"
+        
+        current_step_description = self.current_plan[self.current_step]
+        
+        # Build context with execution history
+        context_text = ""
+        if context:
+            context_lines = [
+                "Current Context:",
+                f"- Working Directory: {context.get('current_directory', 'Unknown')}",
+                f"- OS: {context.get('system_info', {}).get('os', self.os_fullname)}",
+                f"- Shell: {context.get('system_info', {}).get('shell_name', self.shell)}",
+            ]
+            context_text = "\n".join(context_lines) + "\n\n"
+        
+        # Add execution history
+        history_text = ""
+        if self.execution_history:
+            history_lines = ["Previous execution results:"]
+            for i, result in enumerate(self.execution_history[-3:], 1):  # Last 3 results
+                status = "✓" if result['success'] else "✗"
+                history_lines.append(f"{status} Step {i}: {result['command']}")
+                if result['output']:
+                    history_lines.append(f"   Output: {result['output'][:100]}...")
+                if result['error']:
+                    history_lines.append(f"   Error: {result['error'][:100]}...")
+            history_text = "\n".join(history_lines) + "\n\n"
+        
+        prompt = f"""{context_text}{history_text}Current plan step: {current_step_description}
+
+Based on the current context and any previous execution results, provide the exact command to execute for this step.
+
+Format your response as:
+COMMAND: [exact command to execute]
+DESCRIPTION: [brief explanation of what this command does]
+
+Make sure the command is:
+1. Appropriate for {self.os_fullname} using {self.shell}
+2. Safe and follows best practices
+3. Adapted based on any previous execution results if needed"""
+
+        try:
+            response_text = self._make_proxy_request(prompt, max_tokens=300)
+            
+            # Parse the response
+            lines = [line.strip() for line in response_text.split('\n') if line.strip()]
+            
+            command = None
+            description = None
+            
+            for line in lines:
+                if line.startswith("COMMAND:"):
+                    command = line.replace("COMMAND:", "").strip()
+                elif line.startswith("DESCRIPTION:"):
+                    description = line.replace("DESCRIPTION:", "").strip()
+            
+            if not command:
+                raise ValueError("No command found in response")
+            
+            return command, description
+            
+        except Exception as e:
+            raise ValueError(f"Error executing step: {str(e)}")
+    
+    def record_execution(self, command: str, success: bool, output: str = "", error: str = ""):
+        """Record the result of command execution."""
+        if self.model_type != "gemini-thinking":
+            return
+            
+        self.execution_history.append({
+            'command': command,
+            'success': success,
+            'output': output,
+            'error': error
+        })
+        self.current_step += 1
+    
+    def reset_plan(self):
+        """Reset the current plan and execution state."""
+        if self.model_type != "gemini-thinking":
+            return
+            
+        self.current_plan = None
+        self.current_step = 0
+        self.execution_history = []

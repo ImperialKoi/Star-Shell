@@ -369,8 +369,16 @@ class ModeManager:
                 return OpenAIGenie(api_key, os_fullname, shell)
             
             elif mode == "gemini-thinking":
-                api_key = kwargs.get("gemini_api_key")
-                return GeminiThinkingGenie(api_key, os_fullname, shell)
+                # Check if we should use secret backend for gemini-thinking
+                if "backend_url" in kwargs and "secret_token" in kwargs:
+                    # Use secret backend with gemini-thinking model
+                    backend_url = kwargs.get("backend_url", "https://star-shell-backend.vercel.app/")
+                    secret_token = kwargs.get("secret_token", "secret-3.14159")
+                    return ProxyGenie(backend_url, secret_token, os_fullname, shell, "gemini-thinking")
+                else:
+                    # Use regular GeminiThinkingGenie with API key
+                    api_key = kwargs.get("gemini_api_key")
+                    return GeminiThinkingGenie(api_key, os_fullname, shell)
             
             elif mode in ["gemini-pro", "gemini-flash"]:
                 api_key = kwargs.get("gemini_api_key")

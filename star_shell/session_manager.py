@@ -455,6 +455,32 @@ class SessionManager:
             # Already using this mode, no need for new credentials
             return {}
         
+        # Special case: If currently using secret backend and switching to any Gemini mode,
+        # offer to stay on secret backend with different model
+        if current_mode == "secret-3.14159" and mode.startswith("gemini"):
+            from rich.prompt import Confirm
+            use_secret = Confirm.ask(
+                f"[bold blue]Stay on secret backend and use {config.display_name}?[/bold blue]",
+                default=True
+            )
+            if use_secret:
+                # Use secret backend credentials but with the target Gemini model
+                return {
+                    "backend_url": "https://star-shell-backend.vercel.app/",
+                    "secret_token": "secret-3.14159", 
+                    "model_type": mode  # Use the specific Gemini model (gemini-pro, gemini-flash, or gemini-thinking)
+                }
+        
+        # Check if we have existing API keys in config
+        try:
+            from star_shell.utils import load_config
+            current_config = load_config()
+            if config.api_key_field in current_config and current_config[config.api_key_field]:
+                # We have existing credentials, use them
+                return {config.api_key_field: current_config[config.api_key_field]}
+        except Exception:
+            pass
+        
         # Prompt for API key with validation
         max_attempts = 3
         for attempt in range(max_attempts):
